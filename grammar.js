@@ -188,6 +188,7 @@ module.exports = grammar({
         $.set_sentinel,
         $.set_condprefix,
         $.set_condenumprefix,
+        $.set_labelprefix,
         $.set_startlabel,
         $.set_posixcaptures,
         $.set_header,

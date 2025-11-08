@@ -1,0 +1,38 @@
+{
+  "$schema": "https://tree-sitter.github.io/tree-sitter/assets/schemas/config.schema.json",
+  "grammars": [
+    {
+      "name": "re2c",
+      "camelcase": "re2c",
+      "title": "re2c",
+      "scope": "source.re",
+      "file-types": [
+        "re"
+      ],
+      "injection-regex": "^re2c$",
+      "class-name": "TreeSitterRe2c"
+    }
+  ],
+  "metadata": {
+    "version": "0.1.0",
+    "license": "MIT",
+    "description": "re2c grammar for tree-sitter",
+    "authors": [
+      {
+        "name": "Alexandre Muller"
+      }
+    ],
+    "links": {
+      "repository": "https://github.com/tree-sitter-grammars/tree-sitter-re2c"
+    }
+  },
+  "bindings": {
+    "c": true,
+    "go": true,
+    "node": true,
+    "python": true,
+    "rust": true,
+    "swift": true,
+    "zig": false
+  }
+}
