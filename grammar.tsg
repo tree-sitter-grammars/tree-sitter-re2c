@@ -1,0 +1,439 @@
+// Re2c grammar for tree-sitter (native DSL).
+// Translated from grammar.js.
+
+let NAME: rule_t = regexp(r"[a-zA-Z_][a-zA-Z0-9_]*")
+let LEX_BLOCK_END: rule_t = regexp(r"([^*]|[\r\n]|(\*+([^*/]|[\r\n])))*")
+
+// JS `suffix(name)` default form: token_immediate(name) ':' 're2c'
+macro suffix(name: str_t) rule_t {
+    seq(token_immediate(name), token_immediate(":"), token_immediate("re2c"))
+}
+
+// JS `suffix(name, suf, nested=true)`: inner is already a rule (not token-immediate'd again)
+macro suffix_nested(inner: rule_t, suf: str_t) rule_t {
+    seq(inner, token_immediate(":"), token_immediate(suf))
+}
+
+grammar {
+    language: "re2c",
+    word: identifier,
+    extras: [regexp(r"\s"), comment],
+    inline: [
+        _name, _label, _block_name, _field_identifier, _string, _filename,
+        _rule, _directive, _codepoint, _esc_hex, _esc_oct, _clist,
+        _char_cls_expr, _bracket_literal, _linenum,
+    ],
+    conflicts: [
+        [_code_in_braces],
+        [character_class, range],
+    ],
+    supertypes: [_atom, _escape],
+}
+
+rule re2c { repeat(choice(host_lang, _block)) }
+
+rule host_lang { token(regexp(r"([^/]|\/[^*]|\/\*[^!])+")) }
+
+rule _block {
+    seq(
+        "/*!",
+        choice(
+            global_block, local_block, rules_block, use_block,
+            max_block, maxnmatch_block, stags_block, mtags_block,
+            getstate_block, header_on_block, header_off_block, ignore_block,
+        ),
+        "*/",
+    )
+}
+
+rule global_block {
+    seq(token_immediate("re2c"), optional(_block_name), optional(body))
+}
+
+rule local_block {
+    seq(suffix("local"), optional(_block_name), optional(body))
+}
+
+rule rules_block {
+    seq(suffix("rules"), optional(_block_name), optional(body))
+}
+
+rule _block_name {
+    seq(token_immediate(":"), alias(token_immediate(NAME), block_name))
+}
+
+rule use_block { seq(suffix("use"), optional(_block_name)) }
+
+rule max_block { seq(suffix("max"), optional(block_list)) }
+
+rule maxnmatch_block { seq(suffix("maxnmatch"), optional(block_list)) }
+
+rule types_block { seq(suffix("types"), optional(block_list)) }
+
+rule getstate_block { seq(suffix("getstate"), optional(block_list)) }
+
+rule stags_block {
+    seq(suffix("stags"), optional(block_list), repeat(_tag_directive))
+}
+
+rule mtags_block {
+    seq(suffix("mtags"), optional(block_list), repeat(_tag_directive))
+}
+
+rule include_block { seq(suffix("include"), regexp(r" "), _filename) }
+
+rule header_on_block { seq(suffix_nested(suffix("header"), "on")) }
+
+rule header_off_block { seq(suffix_nested(suffix("header"), "off")) }
+
+rule ignore_block { token(seq(suffix("ignore"), LEX_BLOCK_END)) }
+
+rule block_list { repeat1(_block_name) }
+
+rule _filename { field(filename, _string) }
+
+rule _tag_directive { choice(format_directive, separator_directive) }
+
+rule format_directive {
+    seq("format", "=", field(format, _string), ";")
+}
+
+rule separator_directive {
+    seq("separator", "=", field(separator, _string), ";")
+}
+
+rule body {
+    repeat1(choice(
+        named_definition, configuration, _rule, _directive, linedir,
+    ))
+}
+
+rule named_definition {
+    seq(field(name, _name), "=", field(value, regex), ";")
+}
+
+rule _name { alias(identifier, name) }
+
+rule configuration {
+    seq(
+        "re2c", token_immediate(":"),
+        choice(
+            set_flags, define, set_cond, set_label, set_variable,
+            set_yych, set_state, set_yybm, set_cgoto, set_api,
+            set_tags, set_indent, set_yyfill,
+            set_eof, set_sentinel, set_condprefix, set_condenumprefix,
+            set_startlabel, set_posixcaptures, set_header,
+        ),
+        ";",
+    )
+}
+
+rule _option_name {
+    seq(
+        token_immediate(":"),
+        field(option, alias(token_immediate(regexp(r"[a-zA-Z0-9_:-]+")), option_name)),
+        optional(seq(
+            choice(token_immediate(":"), token_immediate("@")),
+            field(field, alias(token_immediate(regexp(r"[a-zA-Z0-9_:-]+")), option_name)),
+        )),
+    )
+}
+
+rule set_flags { seq(token_immediate("flags"), _option_name, "=", _conf_value) }
+
+rule define { seq(token_immediate("define"), _option_name, "=", _conf_value) }
+
+rule set_cond { seq(token_immediate("cond"), _option_name, "=", _conf_value) }
+
+rule set_label { seq(token_immediate("label"), _option_name, "=", _conf_value) }
+
+rule set_variable { seq(token_immediate("variable"), _option_name, "=", _conf_value) }
+
+rule set_yych { seq(token_immediate("yych"), _option_name, "=", _conf_value) }
+
+rule set_state { seq(token_immediate("state"), _option_name, "=", _conf_value) }
+
+rule set_yybm { seq(token_immediate("yybm"), _option_name, "=", _conf_value) }
+
+rule set_cgoto { seq(token_immediate("cgoto"), _option_name, "=", _conf_value) }
+
+rule set_api { seq(token_immediate("api"), _option_name, "=", _conf_value) }
+
+rule set_tags { seq(token_immediate("tags"), optional(_option_name), "=", _conf_value) }
+
+rule set_indent { seq(token_immediate("indent"), _option_name, "=", _conf_value) }
+
+rule set_yyfill { seq(token_immediate("yyfill"), _option_name, "=", _conf_value) }
+
+rule set_eof { seq(token_immediate("eof"), "=", _conf_value) }
+
+rule set_sentinel { seq(token_immediate("sentinel"), "=", _conf_value) }
+
+rule set_condprefix { seq(token_immediate("condprefix"), "=", _conf_value) }
+
+rule set_condenumprefix { seq(token_immediate("condenumprefix"), "=", _conf_value) }
+
+rule set_labelprefix { seq(token_immediate("labelprefix"), "=", _conf_value) }
+
+rule set_startlabel { seq(token_immediate("startlabel"), "=", _conf_value) }
+
+rule set_posixcaptures { seq(token_immediate("posix-captures"), "=", _conf_value) }
+
+rule set_header { seq(token_immediate("header"), "=", _conf_value) }
+
+rule _conf_value {
+    field(value, choice(
+        encoding_policy, input_conf, empty_class_conf, api_style,
+        _string, number, _name, field_expression,
+    ))
+}
+
+rule field_expression {
+    seq(
+        field(argument, identifier),
+        field(operator, choice(".", "->")),
+        field(field, _field_identifier),
+    )
+}
+
+rule _field_identifier { alias(identifier, field_identifier) }
+
+rule encoding_policy { choice("ignore", "substitute", "fail") }
+
+rule input_conf { choice("default", "custom") }
+
+rule empty_class_conf { choice("match-empty", "match-none", "error") }
+
+rule api_style { choice("functions", "free-form") }
+
+rule _rule { choice(ordinary_rule, conditional_rule) }
+
+rule ordinary_rule { choice(seq(pattern, action)) }
+
+rule conditional_rule {
+    choice(
+        seq(condition, pattern, action),
+        seq(condition, pattern, shortcut, action),
+        seq(condition, pattern, shortcut),
+        seq(condition, action),
+        seq(condition, shortcut, action),
+        seq(condition, shortcut),
+    )
+}
+
+rule shortcut {
+    choice(
+        seq("=>", field(condition, _label)),
+        seq(":=>", field(condition, _label)),
+    )
+}
+
+rule _label { alias(identifier, label) }
+
+rule condition {
+    choice(
+        seq("<", optional(_clist), ">"),
+        seq("<", "!", optional(_clist), ">"),
+    )
+}
+
+rule _clist {
+    choice(
+        seq(repeat(seq(_label, ",")), _label),
+        seq(alias("*", any)),
+    )
+}
+
+rule pattern {
+    choice(regex, alias("*", default), alias("$", end_of_input))
+}
+
+rule action {
+    seq("{", optional(alias(code_block, host_lang)), prec_dynamic(1, "}"))
+}
+
+rule code_block { repeat1(_code_in_braces) }
+
+rule _code_in_braces {
+    choice(
+        seq(regexp(r#""([^"\\\n]|\\.)*""#)),
+        seq(regexp(r"'([^'\\\n]|\\.)*'")),
+        seq(regexp(r#"[^{}"'\/]+"#)),
+        seq(regexp(r#"\\[^{}"'\/]"#)),
+        seq("{", repeat(_code_in_braces), optional("}")),
+        regexp(r"'\w+"),
+    )
+}
+
+rule _directive { choice(use, include) }
+
+rule use { seq("!use", _block_name, ";") }
+
+rule include { seq("!include", _filename, ";") }
+
+rule regex { choice(lookahead, _pattern_expr) }
+
+rule lookahead {
+    seq(
+        field(expr, _pattern_expr),
+        field(operator, "/"),
+        field(lookahead, _pattern_expr),
+    )
+}
+
+rule _pattern_expr { choice(alternation, _alt_expr) }
+
+rule alternation {
+    seq(repeat1(seq(_branch, field(operator, "|"))), _branch)
+}
+
+rule _branch { field(branch, choice(_alt_expr)) }
+
+rule _alt_expr { choice(difference, _dif_expr) }
+
+rule difference {
+    prec_left(0, seq(
+        field(left, _alt_expr),
+        field(operator, "\\"),
+        field(right, _alt_expr),
+    ))
+}
+
+rule _dif_expr { choice(concat, _cat_expr) }
+
+rule concat { seq(_cat_expr, repeat1(_cat_expr)) }
+
+rule _cat_expr { choice(repetition, _atom) }
+
+rule repetition {
+    choice(
+        seq(_atom, limits),
+        seq(_atom, close),
+    )
+}
+
+rule close {
+    choice(token_immediate("*"), token_immediate("+"), token_immediate("?"))
+}
+
+rule limits {
+    choice(
+        seq(token_immediate("{"), _mininum, token_immediate(","), _maximum, token_immediate("}")),
+        seq(token_immediate("{"), _mininum, token_immediate(","), token_immediate("}")),
+        seq(token_immediate("{"), _exactly, token_immediate("}")),
+    )
+}
+
+rule _mininum { field(minimum, alias(token_immediate(regexp(r"[0-9]+")), number)) }
+
+rule _maximum { field(maximum, alias(token_immediate(regexp(r"[0-9]+")), number)) }
+
+rule _exactly { field(exactly, alias(token_immediate(regexp(r"[0-9]+")), number)) }
+
+rule _atom {
+    choice(parenthesized, _string, character_class, wildcard, _name, stag, mtag)
+}
+
+rule parenthesized { seq("(", _pattern_expr, ")") }
+
+rule character_class {
+    seq(
+        "[",
+        optional(token_immediate("^")),
+        optional(_bracket_literal),
+        repeat(_char_cls_expr),
+        token_immediate("]"),
+    )
+}
+
+rule _bracket_literal { alias(token_immediate("]"), literal) }
+
+rule _char_cls_expr { choice(range, _codepoint) }
+
+rule range {
+    seq(
+        field(from, _codepoint),
+        alias(token_immediate(regexp(r"-")), "-"),
+        field(to, _codepoint),
+    )
+}
+
+rule wildcard { alias(".", ".") }
+
+rule _codepoint { choice(literal, _escape) }
+
+rule literal {
+    choice(
+        token_immediate(prec(-1, regexp(r"."))),
+        token_immediate(regexp(r"-")),
+    )
+}
+
+rule dstring { seq(regexp(r#""([^\n\\"]|\\.)*"?"#)) }
+
+rule sstring { seq(regexp(r"'([^\n\\']|\\.)*'?")) }
+
+rule _string { choice(dstring, sstring) }
+
+rule _escape { choice(quote, ctrl_code, code_unit) }
+
+rule quote {
+    token(seq("\\", choice("\\", "]", "-", "\"", "\"")))
+}
+
+rule ctrl_code {
+    token(seq("\\", choice("a", "b", "f", "n", "r", "t", "v")))
+}
+
+rule code_unit { choice(_esc_hex, _esc_oct) }
+
+rule _esc_hex {
+    choice(
+        token(seq("\\", "x", regexp(r"[0-9a-fA-F]{2}"))),
+        token(seq("\\", "u", regexp(r"[0-9a-fA-F]{4}"))),
+        token(seq("\\", "X", regexp(r"[0-9a-fA-F]{4}"))),
+        token(seq("\\", "U", regexp(r"[0-9a-fA-F]{8}"))),
+        seq(token(seq("\\", "x", regexp(r"[0-9a-fA-F]{0,1}"))), hex_digit),
+        seq(token(seq("\\", "u", regexp(r"[0-9a-fA-F]{0,3}"))), hex_digit),
+        seq(token(seq("\\", "X", regexp(r"[0-9a-fA-F]{0,3}"))), hex_digit),
+        seq(token(seq("\\", "U", regexp(r"[0-9a-fA-F]{0,7}"))), hex_digit),
+    )
+}
+
+rule _esc_oct {
+    choice(
+        token(seq("\\", seq(regexp(r"[0-2][0-7]{2}")))),
+        seq(token(seq("\\", regexp(r"[0-2][0-7]{0,1}"))), oct_digit),
+    )
+}
+
+rule hex_digit { token_immediate(regexp(r"[0-9a-fA-F]")) }
+
+rule oct_digit { token_immediate(regexp(r"[0-7]")) }
+
+rule stag { seq("@", token_immediate(NAME)) }
+
+rule mtag { seq("#", token_immediate(NAME)) }
+
+rule identifier { regexp(r"[a-zA-Z_][a-zA-Z0-9_]*") }
+
+rule number {
+    choice(
+        "0",
+        seq("-", token_immediate(regexp(r"[1-9][0-9]*"))),
+        seq(regexp(r"[1-9][0-9]*")),
+    )
+}
+
+rule comment {
+    choice(
+        token(prec(2, seq("//", regexp(r"(\\(.|\r?\n)|[^\\\n])*")))),
+        token(prec(-1, seq("/*", regexp(r"[^*]*\*+([^/*][^*]*\*+)*"), "/"))),
+    )
+}
+
+rule linedir {
+    seq("#", "line", _filename, optional(_linenum), regexp(r"\r?\n"))
+}
+
+rule _linenum { field(linenum, number) }
